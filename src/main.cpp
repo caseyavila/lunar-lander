@@ -137,7 +137,7 @@ public:
         return readings.pos.y - map[x][z];
     }
 
-    bool aligned() {
+    float aligned() {
         float x = readings.pos.x - (crater->min.x * crater_scale);
         float z = readings.pos.z - (crater->min.z * crater_scale);
 
@@ -166,6 +166,7 @@ public:
         readings.lacc = readings.thrust * heading;
 
         if (altitude() < 0) {
+            cout << aligned() << endl;
             if (glm::length(readings.lvel) > 0.02) {
                 cout << "CRASH: Hit the ground too hard!" << endl;
             } else if (readings.pitch_v + readings.roll_v > 0.02) {
