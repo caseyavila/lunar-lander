@@ -444,6 +444,18 @@ public:
             Model->rotate(readings.roll, forward);
             glUniformMatrix4fv(texProg->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
             lander->draw(texProg);
+
+            texProg->unbind();
+
+            prog->bind();
+
+            glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
+            glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, value_ptr(view));
+            glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
+            glUniform3f(prog->getUniform("MatAmb"), 0.93, 0.03, 0.03);
+            glUniform3f(prog->getUniform("MatSpec"), 0.45, 0.05, 0.05);
+            glUniform1f(prog->getUniform("MatShine"), 100.0);
+            glUniform3f(prog->getUniform("lightPos"), 1000, 200, 0);
             if (readings.thrust != 0) {
                 Model->pushMatrix();
                     Model->scale(up * 0.5f);
@@ -452,12 +464,6 @@ public:
             }
         Model->popMatrix();
 
-        texProg->unbind();
-        
-        prog->bind();
-        glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
-        glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, value_ptr(view));
-        glUniform3f(prog->getUniform("lightPos"), 1000, 200, 0);
 
         Model->pushMatrix();
             Model->translate(vec3(0, -1, 0));
