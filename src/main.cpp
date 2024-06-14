@@ -26,6 +26,8 @@
 using namespace std;
 using namespace glm;
 
+bool landed = false;
+
 class Application : public EventCallbacks {
 
 public:
@@ -41,12 +43,12 @@ public:
     shared_ptr<Shape> crater;
     shared_ptr<Shape> sphere;
     shared_ptr<Shape> lander;
-    shared_ptr<Shape> bunny;
+    shared_ptr<Shape> plume;
 
     //the image to use as a texture (ground)
     shared_ptr<Texture> texture0;
     shared_ptr<Texture> night;
-    shared_ptr<Texture> mars;
+    shared_ptr<Texture> lander_tex;
 
     vec3 up = vec3(0, 1, 0);
     vec3 right = vec3(0, 0, 1);
@@ -55,6 +57,9 @@ public:
     vec3 g_l = up * -0.0001f;
 
     vec3 cam_off = vec3(5, 2.5, 0);
+
+    float crater_scale;
+    vector<vector<float>> map;
 
     struct {
         vec3 pos = vec3(5, 0, 0);
@@ -123,6 +128,12 @@ public:
         glViewport(0, 0, width, height);
     }
 
+    float altitude() {
+        float x = readings.pos.x - (crater->min.x * crater_scale);
+        float z = readings.pos.z - (crater->min.z * crater_scale);
+        return readings.pos.y - map[x][z];
+    }
+
     void update_lander() {
 
         readings.roll += readings.roll_v;
@@ -139,6 +150,17 @@ public:
         heading = rotate(heading, readings.pitch, right);
 
         readings.lacc = readings.thrust * heading;
+
+        if (altitude() < 0) {
+            if (glm::length(readings.lvel) > 0.02) {
+                cout << "CRASH: Hit the ground too fast!" << endl;
+            } else if (readings.pitch_v + readings.roll_v > 0.02) {
+                cout << "CRASH: Hit the ground spinning!" << endl;
+            } else {
+                cout << "The eagle has landed!" << endl;
+            }
+            landed = true;
+        }
     }
 
     void init(const std::string& resourceDirectory) {
@@ -194,11 +216,65 @@ public:
         night->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 
         //read in a load the texture
-        mars = make_shared<Texture>();
-        mars->setFilename(resourceDirectory + "/RS3_Mars.png");
-        mars->init();
-        mars->setUnit(0);
-        mars->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+        lander_tex = make_shared<Texture>();
+        lander_tex->setFilename(resourceDirectory + "/lander.png");
+        lander_tex->init();
+        lander_tex->setUnit(0);
+        lander_tex->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+    }
+
+    void interpolateZeroes(std::vector<std::vector<float>>& vec) {
+        int rows = vec.size();
+        if (rows == 0) return; // Empty vector
+        int cols = vec[0].size();
+
+        // Interpolate rows
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                if (vec[i][j] == 0) {
+                    // Find nearest non-zero values in the same row
+                    float leftVal = 0, rightVal = 0;
+                    for (int k = j - 1; k >= 0; --k) {
+                        if (vec[i][k] != 0) {
+                            leftVal = vec[i][k];
+                            break;
+                        }
+                    }
+                    for (int k = j + 1; k < cols; ++k) {
+                        if (vec[i][k] != 0) {
+                            rightVal = vec[i][k];
+                            break;
+                        }
+                    }
+                    // Linear interpolation
+                    vec[i][j] = (leftVal + rightVal) / 2;
+                }
+            }
+        }
+
+        // Interpolate columns
+        for (int j = 0; j < cols; ++j) {
+            for (int i = 0; i < rows; ++i) {
+                if (vec[i][j] == 0) {
+                    // Find nearest non-zero values in the same column
+                    float upVal = 0, downVal = 0;
+                    for (int k = i - 1; k >= 0; --k) {
+                        if (vec[k][j] != 0) {
+                            upVal = vec[k][j];
+                            break;
+                        }
+                    }
+                    for (int k = i + 1; k < rows; ++k) {
+                        if (vec[k][j] != 0) {
+                            downVal = vec[k][j];
+                            break;
+                        }
+                    }
+                    // Linear interpolation
+                    vec[i][j] = (upVal + downVal) / 2;
+                }
+            }
+        }
     }
 
     void initGeom(const std::string& resourceDirectory)
@@ -239,14 +315,14 @@ public:
         vector<tinyobj::shape_t> TOshapesD;
         vector<tinyobj::material_t> objMaterialsD;
         //load in the mesh and make the shape(s)
-        rc = tinyobj::LoadObj(TOshapesD, objMaterialsD, errStr, (resourceDirectory + "/bunnyNoNorm.obj").c_str());
+        rc = tinyobj::LoadObj(TOshapesD, objMaterialsD, errStr, (resourceDirectory + "/plume.obj").c_str());
         if (!rc) {
             cerr << errStr << endl;
         } else {
-            bunny = make_shared<Shape>();
-            bunny->createShape(TOshapesD[0]);
-            bunny->measure();
-            bunny->init();
+            plume = make_shared<Shape>();
+            plume->createShape(TOshapesD[0]);
+            plume->measure();
+            plume->init();
         }
 
         // Initialize lander mesh.
@@ -262,6 +338,34 @@ public:
             crater->measure();
             crater->init();
         }
+
+        crater_scale = 1000 / (crater->max.x - crater->min.x);
+        int x_width = (crater->max.x - crater->min.x) * crater_scale;
+        int z_width = (crater->max.z - crater->min.z) * crater_scale;
+        for (int i = 0; i < x_width + 1; i++) {
+            std::vector<float> row;
+            for (int i = 0; i < z_width + 1; i++) {
+                row.push_back(0.f);
+            }
+            map.push_back(row);
+        }
+        for (size_t i = 0; i < crater->posBuf.size(); i += 3) {
+            float px = crater->posBuf[i] - crater->min.x;
+            float pz = crater->posBuf[i + 2] - crater->min.z;
+            map[px * crater_scale][pz * crater_scale]
+               = crater->posBuf[i + 1] * crater_scale;
+        }
+
+        interpolateZeroes(map);
+
+        /*
+        for (size_t i = 0; i < map.size(); i++) {
+            for (size_t j = 0; j < map[i].size(); j++) {
+                cout << map[i][j] << ", ";
+            }
+            cout << endl;
+        }
+        */
     }
 
     /* helper function to set model trasnforms */
@@ -296,19 +400,36 @@ public:
         Projection->pushMatrix();
         Projection->perspective(45.0f, width / (float) height, 0.01f, 1000.0f);
 
+
         texProg->bind();
         glUniformMatrix4fv(texProg->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
         glUniformMatrix4fv(texProg->getUniform("V"), 1, GL_FALSE, value_ptr(view));
-        glUniform1i(texProg->getUniform("flip"), 1);
+        glUniform3f(texProg->getUniform("lightPos"), 1000, 200, 0);
 
+        glUniform1i(texProg->getUniform("flip"), 1);
         night->bind(texProg->getUniform("Texture0"));
         Model->pushMatrix();
             Model->translate(readings.pos + cam_off);
-            setModel(texProg, Model);
             glUniformMatrix4fv(texProg->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
             glDisable(GL_DEPTH_TEST);
             sphere->draw(texProg);
             glEnable(GL_DEPTH_TEST);
+        Model->popMatrix();
+
+        glUniform1i(texProg->getUniform("flip"), 0);
+        lander_tex->bind(texProg->getUniform("Texture0"));
+        Model->pushMatrix();
+            Model->translate(readings.pos);
+            Model->rotate(readings.pitch, right);
+            Model->rotate(readings.roll, forward);
+            glUniformMatrix4fv(texProg->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
+            lander->draw(texProg);
+            if (readings.thrust != 0) {
+                Model->pushMatrix();
+                    Model->scale(up * 0.5f);
+                    plume->draw(texProg);
+                Model->popMatrix();
+            }
         Model->popMatrix();
 
         texProg->unbind();
@@ -316,9 +437,8 @@ public:
         prog->bind();
         glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
         glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, value_ptr(view));
-        glUniform3f(prog->getUniform("lightPos"), 1000, 500, 0);
+        glUniform3f(prog->getUniform("lightPos"), 1000, 200, 0);
 
-        float crater_scale = 1000 / (crater->max.x - crater->min.x);
         Model->pushMatrix();
             Model->translate(vec3(0, -1, 0));
             Model->scale(vec3(crater_scale, crater_scale, crater_scale));
@@ -327,14 +447,6 @@ public:
             glUniform1f(prog->getUniform("MatShine"), 100.0);
             glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
             crater->draw(prog);
-        Model->popMatrix();
-
-        Model->pushMatrix();
-            Model->translate(readings.pos);
-            Model->rotate(readings.pitch, right);
-            Model->rotate(readings.roll, forward);
-            glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
-            lander->draw(prog);
         Model->popMatrix();
 
         prog->unbind();
@@ -373,7 +485,7 @@ int main(int argc, char *argv[])
     auto lastTime = chrono::high_resolution_clock::now();
 
     // Loop until the user closes the window.
-    while (!glfwWindowShouldClose(windowManager->getHandle())) {
+    while (!glfwWindowShouldClose(windowManager->getHandle()) && !landed) {
         auto nextLastTime = chrono::high_resolution_clock::now();
 
         // get time since last frame
