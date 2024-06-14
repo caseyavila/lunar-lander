@@ -17,9 +17,7 @@ void main() {
       Outcolor = texColor0;
     } else {
       float d_c = dot(normalize(fragNor), normalize(lightDir));
-      //Outcolor = d_c * texColor0;
-      //Outcolor = d_c * texColorsky;
-      Outcolor = d_c * (1.5 * texColorsky + 0.5 * texColor0);
+      Outcolor = d_c * (1.3 * texColorsky + 0.5 * texColor0);
     }
 }
 

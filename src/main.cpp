@@ -46,9 +46,9 @@ public:
     shared_ptr<Shape> plume;
 
     //the image to use as a texture (ground)
-    shared_ptr<Texture> texture0;
     shared_ptr<Texture> night;
     shared_ptr<Texture> lander_tex;
+    shared_ptr<Texture> nibox;
 
     vec3 up = vec3(0, 1, 0);
     vec3 right = vec3(0, 0, 1);
@@ -219,13 +219,6 @@ public:
         texProg->addAttribute("vertTex");
 
         //read in a load the texture
-        texture0 = make_shared<Texture>();
-        texture0->setFilename(resourceDirectory + "/moon.jpg");
-        texture0->init();
-        texture0->setUnit(0);
-        texture0->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
-
-        //read in a load the texture
         night = make_shared<Texture>();
         night->setFilename(resourceDirectory + "/sphere-night.png");
         night->init();
@@ -238,6 +231,13 @@ public:
         lander_tex->init();
         lander_tex->setUnit(2);
         lander_tex->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+
+        //read in a load the texture
+        nibox = make_shared<Texture>();
+        nibox->setFilename(resourceDirectory + "/nibox.jpg");
+        nibox->init();
+        nibox->setUnit(3);
+        nibox->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
     }
 
     void interpolateZeroes(std::vector<std::vector<float>>& vec) {
@@ -424,7 +424,7 @@ public:
         glUniformMatrix4fv(texProg->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
         glUniformMatrix4fv(texProg->getUniform("V"), 1, GL_FALSE, value_ptr(view));
         glUniform3f(texProg->getUniform("lightPos"), 1000, 200, 0);
-        night->bind(texProg->getUniform("skytex"));
+        nibox->bind(texProg->getUniform("skytex"));
 
         glUniform1i(texProg->getUniform("flip"), 1);
         night->bind(texProg->getUniform("Texture0"));
