@@ -60,6 +60,9 @@ public:
 
     float crater_scale;
     vector<vector<float>> map;
+    vector<vector<float>> norm_x;
+    vector<vector<float>> norm_y;
+    vector<vector<float>> norm_z;
 
     struct {
         vec3 pos = vec3(5, 0, 0);
@@ -134,6 +137,17 @@ public:
         return readings.pos.y - map[x][z];
     }
 
+    bool aligned() {
+        float x = readings.pos.x - (crater->min.x * crater_scale);
+        float z = readings.pos.z - (crater->min.z * crater_scale);
+
+        vec3 moon = vec3(norm_x[x][z], norm_y[x][z], norm_z[x][z]);
+        vec3 lander = rotate(up, readings.roll, forward);
+        lander = rotate(lander, readings.pitch, right);
+
+        return dot(normalize(moon), normalize(lander));
+    }
+
     void update_lander() {
 
         readings.roll += readings.roll_v;
@@ -153,9 +167,11 @@ public:
 
         if (altitude() < 0) {
             if (glm::length(readings.lvel) > 0.02) {
-                cout << "CRASH: Hit the ground too fast!" << endl;
+                cout << "CRASH: Hit the ground too hard!" << endl;
             } else if (readings.pitch_v + readings.roll_v > 0.02) {
                 cout << "CRASH: Hit the ground spinning!" << endl;
+            } else if (aligned() < 0.8) {
+                cout << "CRASH: Didn't land straight!" << endl;
             } else {
                 cout << "The eagle has landed!" << endl;
             }
@@ -196,6 +212,7 @@ public:
         texProg->addUniform("M");
         texProg->addUniform("flip");
         texProg->addUniform("Texture0");
+        texProg->addUniform("skytex");
         texProg->addUniform("lightPos");
         texProg->addAttribute("vertPos");
         texProg->addAttribute("vertNor");
@@ -212,14 +229,14 @@ public:
         night = make_shared<Texture>();
         night->setFilename(resourceDirectory + "/sphere-night.png");
         night->init();
-        night->setUnit(0);
+        night->setUnit(1);
         night->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 
         //read in a load the texture
         lander_tex = make_shared<Texture>();
         lander_tex->setFilename(resourceDirectory + "/lander.png");
         lander_tex->init();
-        lander_tex->setUnit(0);
+        lander_tex->setUnit(2);
         lander_tex->setWrapModes(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
     }
 
@@ -348,7 +365,11 @@ public:
                 row.push_back(0.f);
             }
             map.push_back(row);
+            norm_x.push_back(row);
+            norm_y.push_back(row);
+            norm_z.push_back(row);
         }
+
         for (size_t i = 0; i < crater->posBuf.size(); i += 3) {
             float px = crater->posBuf[i] - crater->min.x;
             float pz = crater->posBuf[i + 2] - crater->min.z;
@@ -358,31 +379,29 @@ public:
 
         interpolateZeroes(map);
 
+        for (size_t i = 0; i < crater->posBuf.size(); i += 3) {
+            float px = crater->posBuf[i] - crater->min.x;
+            float pz = crater->posBuf[i + 2] - crater->min.z;
+            norm_x[px * crater_scale][pz * crater_scale] = crater->norBuf[i];
+            norm_y[px * crater_scale][pz * crater_scale] = crater->norBuf[i + 1];
+            norm_z[px * crater_scale][pz * crater_scale] = crater->norBuf[i + 2];
+        }
+
+        interpolateZeroes(norm_x);
+        interpolateZeroes(norm_y);
+        interpolateZeroes(norm_z);
+
         /*
-        for (size_t i = 0; i < map.size(); i++) {
-            for (size_t j = 0; j < map[i].size(); j++) {
-                cout << map[i][j] << ", ";
+        for (size_t i = 0; i < norm_x.size(); i++) {
+            for (size_t j = 0; j < norm_x[i].size(); j++) {
+                cout << norm_x[i][j] << ", ";
             }
             cout << endl;
         }
         */
+        
     }
 
-    /* helper function to set model trasnforms */
-    void SetModel(vec3 trans, float rotY, float rotX, float sc, shared_ptr<Program> curS) {
-        mat4 Trans = glm::translate(glm::mat4(1.0f), trans);
-        mat4 RotX = glm::rotate(glm::mat4(1.0f), rotX, vec3(1, 0, 0));
-        mat4 RotY = glm::rotate(glm::mat4(1.0f), rotY, vec3(0, 1, 0));
-        mat4 ScaleS = glm::scale(glm::mat4(1.0f), vec3(sc));
-        mat4 ctm = Trans*RotX*RotY*ScaleS;
-        glUniformMatrix4fv(curS->getUniform("M"), 1, GL_FALSE, value_ptr(ctm));
-    }
-
-    void setModel(std::shared_ptr<Program> prog, std::shared_ptr<MatrixStack>M) {
-        glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(M->topMatrix()));
-    }
-
-       /* code to draw waving hierarchical model */
     void render(float frametime) {
         // Get current frame buffer size.
         int width, height;
@@ -405,6 +424,7 @@ public:
         glUniformMatrix4fv(texProg->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
         glUniformMatrix4fv(texProg->getUniform("V"), 1, GL_FALSE, value_ptr(view));
         glUniform3f(texProg->getUniform("lightPos"), 1000, 200, 0);
+        night->bind(texProg->getUniform("skytex"));
 
         glUniform1i(texProg->getUniform("flip"), 1);
         night->bind(texProg->getUniform("Texture0"));

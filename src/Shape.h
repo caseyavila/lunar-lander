@@ -26,12 +26,12 @@ public:
 	glm::vec3 min = glm::vec3(0);
 	glm::vec3 max = glm::vec3(0);
 
-	std::vector<unsigned int> eleBuf;
 	std::vector<float> posBuf;
+	std::vector<float> norBuf;
 
 private:
 
-	std::vector<float> norBuf;
+	std::vector<unsigned int> eleBuf;
 	std::vector<float> texBuf;
 	unsigned int eleBufID = 0;
 	unsigned int posBufID = 0;

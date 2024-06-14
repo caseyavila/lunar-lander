@@ -33,6 +33,7 @@ if(NOT WIN32)
   add_compile_options("-Wall")
   add_compile_options("-pedantic")
   add_compile_options("-Werror=return-type")
+  add_compile_options("-O2")
  
   # TODO: The following links may be uneeded. 
   if(APPLE)
