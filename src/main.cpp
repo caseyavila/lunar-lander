@@ -19,6 +19,7 @@
 #include <tiny_obj_loader/tiny_obj_loader.h>
 
 // value_ptr for glm
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
